@@ -1,4 +1,4 @@
-const { add, subtract } = require('./index');
+const { add, subtract, multiply } = require('./index');
 
 let passed = 0;
 let failed = 0;
@@ -12,6 +12,9 @@ assert(add(1, 2) === 3, 'add(1,2) should be 3');
 assert(add(0, 0) === 0, 'add(0,0) should be 0');
 assert(subtract(5, 3) === 2, 'subtract(5,3) should be 2');
 assert(subtract(0, 1) === -1, 'subtract(0,1) should be -1');
+assert(multiply(3, 4) === 12, 'multiply(3,4) should be 12');
+assert(multiply(0, 5) === 0, 'multiply(0,5) should be 0');
+assert(multiply(-2, 3) === -6, 'multiply(-2,3) should be -6');
 
 console.log(`Tests: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
