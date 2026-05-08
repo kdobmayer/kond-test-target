@@ -6,7 +6,7 @@ Express-based REST API for user management. Used as a test target for KOND E2E a
 
 - User CRUD operations via REST endpoints
 - Jest test suite
-- The API is designed to recieve JSON payloads and return JSON responses
+- The API is designed to receive JSON payloads and return JSON responses
 
 ## Usage
 
