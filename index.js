@@ -6,4 +6,8 @@ function subtract(a, b) {
   return a - b;
 }
 
-module.exports = { add, subtract };
+function max(a, b) {
+  return a >= b ? a : b;
+}
+
+module.exports = { add, subtract, max };
