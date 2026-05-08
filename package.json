@@ -4,6 +4,16 @@
   "description": "Test target repo for KOND E2E testing",
   "main": "index.js",
   "scripts": {
-    "test": "node test.js"
+    "test": "jest"
+  },
+  "jest": {
+    "testMatch": ["**/*.test.js"]
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "jest": "^30.4.1",
+    "supertest": "^7.2.2"
   }
 }
