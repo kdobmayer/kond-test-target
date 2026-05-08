@@ -6,4 +6,8 @@ function subtract(a, b) {
   return a - b;
 }
 
-module.exports = { add, subtract };
+function power(base, exp) {
+  return Math.pow(base, exp);
+}
+
+module.exports = { add, subtract, power };
