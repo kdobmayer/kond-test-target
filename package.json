@@ -1,9 +1,28 @@
 {
-  "name": "kond-test-target",
+  "name": "inventory-management-api",
   "version": "1.0.0",
-  "description": "Test target repo for KOND E2E testing",
-  "main": "index.js",
+  "description": "Inventory management REST API with Express and SQLite",
+  "main": "src/index.js",
   "scripts": {
-    "test": "node test.js"
+    "start": "node src/index.js",
+    "test": "jest --coverage --forceExit",
+    "lint": "eslint src/ --ext .js"
+  },
+  "dependencies": {
+    "better-sqlite3": "11.7.0",
+    "express": "4.21.2"
+  },
+  "devDependencies": {
+    "eslint": "8.57.0",
+    "jest": "29.7.0",
+    "supertest": "7.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/index.js"
+    ]
   }
 }
