@@ -1,4 +1,5 @@
 # kond-test-target
+<!-- This file documents the project structure and conventions for contributors. -->
 
 Express-based REST API for user management. Used as a test target for KOND E2E and benchmark testing.
 
