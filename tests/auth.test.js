@@ -34,6 +34,8 @@ describe('Auth Middleware', () => {
     const res = await request(app).get('/health');
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('ok');
+    expect(typeof res.body.uptime).toBe('number');
+    expect(res.body.uptime).toBeGreaterThanOrEqual(0);
   });
 });
 

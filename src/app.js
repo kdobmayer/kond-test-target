@@ -10,7 +10,7 @@ function createApp() {
 
   // Health check (no auth)
   app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), uptime: process.uptime() });
   });
 
   // Auth middleware for all API routes
