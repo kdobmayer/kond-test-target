@@ -5,22 +5,23 @@ function lowStock(req, res) {
   const db = getDb();
   const threshold = req.query.threshold ? Number(req.query.threshold) : null;
 
-  let sql = `SELECT p.id, p.name, p.sku, p.quantity, p.reorder_level,
+  const conditions = ['p.active = 1'];
+  const params = [];
+
+  if (threshold !== null) {
+    conditions.push('p.quantity <= ?');
+    params.push(threshold);
+  } else {
+    conditions.push('p.quantity <= p.reorder_level');
+  }
+
+  const sql = `SELECT p.id, p.name, p.sku, p.quantity, p.reorder_level,
     p.price, p.cost, c.name as category_name, s.name as supplier_name
     FROM products p
     LEFT JOIN categories c ON p.category_id = c.id
     LEFT JOIN suppliers s ON p.supplier_id = s.id
-    WHERE p.active = 1`;
-  const params = [];
-
-  if (threshold !== null) {
-    sql += ' AND p.quantity <= ?';
-    params.push(threshold);
-  } else {
-    sql += ' AND p.quantity <= p.reorder_level';
-  }
-
-  sql += ' ORDER BY p.quantity ASC';
+    WHERE ${conditions.join(' AND ')}
+    ORDER BY p.quantity ASC`;
 
   const products = db.prepare(sql).all(...params);
 
