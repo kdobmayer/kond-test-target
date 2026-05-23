@@ -189,4 +189,22 @@ function deleteProduct(req, res) {
   res.status(204).send();
 }
 
-module.exports = { listProducts, getProduct, createProduct, updateProduct, deleteProduct };
+function exportProducts(req, res) {
+  const db = getDb();
+  const products = db.prepare('SELECT id, name, sku, quantity, price FROM products ORDER BY id').all();
+
+  const escape = v => {
+    const s = String(v);
+    const escaped = /^[=+\-@]/.test(s) ? `'${s}` : s;
+    return escaped.includes(',') || escaped.includes('"') || escaped.includes('\n') ? `"${escaped.replace(/"/g, '""')}"` : escaped;
+  };
+
+  const header = 'id,name,sku,quantity,price';
+  const rows = products.map(p => [p.id, escape(p.name), escape(p.sku), p.quantity, p.price].join(','));
+  const csv = [header, ...rows].join('\n');
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.send(csv);
+}
+
+module.exports = { listProducts, getProduct, createProduct, updateProduct, deleteProduct, exportProducts };
