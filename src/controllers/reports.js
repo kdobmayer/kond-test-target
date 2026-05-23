@@ -1,9 +1,56 @@
 const { getDb } = require('../db');
+const { validateNumeric, validatePositive } = require('../validation');
+
+function parseNonNegativeNumberQuery(paramName, rawValue) {
+  if (rawValue === undefined) {
+    return { valid: true, value: undefined };
+  }
+
+  const numericCheck = validateNumeric([paramName], { [paramName]: rawValue });
+  if (!numericCheck.valid) {
+    return { valid: false, message: numericCheck.error };
+  }
+
+  const positiveCheck = validatePositive([paramName], { [paramName]: rawValue });
+  if (!positiveCheck.valid) {
+    return { valid: false, message: positiveCheck.error };
+  }
+
+  const value = Number(rawValue);
+  if (!Number.isFinite(value)) {
+    return { valid: false, message: `Fields must be numeric: ${paramName}` };
+  }
+
+  return { valid: true, value };
+}
+
+function parsePositiveIntegerQuery(paramName, rawValue, defaultValue) {
+  if (rawValue === undefined) {
+    return { valid: true, value: defaultValue };
+  }
+
+  const numericCheck = validateNumeric([paramName], { [paramName]: rawValue });
+  if (!numericCheck.valid) {
+    return { valid: false, message: numericCheck.error };
+  }
+
+  const value = Number(rawValue);
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 1) {
+    return { valid: false, message: `${paramName} must be a positive integer` };
+  }
+
+  return { valid: true, value };
+}
 
 // Cross-module flow: reports aggregate across categories and products
 function lowStock(req, res) {
   const db = getDb();
-  const threshold = req.query.threshold ? Number(req.query.threshold) : null;
+  const thresholdCheck = parseNonNegativeNumberQuery('threshold', req.query.threshold);
+  if (!thresholdCheck.valid) {
+    return res.status(400).json({ error: 'Validation Error', message: thresholdCheck.message });
+  }
+
+  const threshold = thresholdCheck.value;
 
   let sql = `SELECT p.id, p.name, p.sku, p.quantity, p.reorder_level,
     p.price, p.cost, c.name as category_name, s.name as supplier_name
@@ -13,7 +60,7 @@ function lowStock(req, res) {
     WHERE p.active = 1`;
   const params = [];
 
-  if (threshold !== null) {
+  if (threshold !== undefined) {
     sql += ' AND p.quantity <= ?';
     params.push(threshold);
   } else {
@@ -100,7 +147,12 @@ function supplierSummary(req, res) {
 
 function stockMovements(req, res) {
   const db = getDb();
-  const days = req.query.days ? Number(req.query.days) : 30;
+  const daysCheck = parsePositiveIntegerQuery('days', req.query.days, 30);
+  if (!daysCheck.valid) {
+    return res.status(400).json({ error: 'Validation Error', message: daysCheck.message });
+  }
+
+  const days = daysCheck.value;
 
   const movements = db.prepare(`
     SELECT sa.*, p.name as product_name, p.sku
