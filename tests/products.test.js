@@ -55,6 +55,45 @@ describe('GET /api/products/:id', () => {
   });
 });
 
+describe('GET /api/products/export', () => {
+  it('returns CSV with correct content-type', async () => {
+    const res = await request(app).get('/api/products/export').set('x-api-key', API_KEY);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/csv/);
+  });
+
+  it('requires an api key', async () => {
+    const res = await request(app).get('/api/products/export');
+    expect(res.status).toBe(401);
+  });
+
+  it('includes header row and all products', async () => {
+    const res = await request(app).get('/api/products/export').set('x-api-key', API_KEY);
+    const lines = res.text.split('\n');
+    expect(lines[0]).toBe('id,name,sku,quantity,price');
+    expect(lines).toHaveLength(4); // header + 3 seeded products
+  });
+
+  it('contains correct data for seeded products', async () => {
+    const res = await request(app).get('/api/products/export').set('x-api-key', API_KEY);
+    const lines = res.text.split('\n');
+    expect(lines[1]).toBe('1,Laptop,LAPTOP-001,50,999.99');
+    expect(lines[2]).toBe('2,T-Shirt,TSHIRT-001,5,29.99');
+    expect(lines[3]).toBe('3,Headphones,HEAD-001,100,149.99');
+  });
+
+  it('escapes spreadsheet formulas in exported text fields', async () => {
+    await request(app)
+      .post('/api/products')
+      .set('x-api-key', API_KEY)
+      .send({ name: '=cmd', sku: 'FORMULA-001', price: 10 });
+
+    const res = await request(app).get('/api/products/export').set('x-api-key', API_KEY);
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("'=cmd");
+  });
+});
+
 describe('POST /api/products', () => {
   it('creates a new product', async () => {
     const res = await request(app).post('/api/products').set('x-api-key', API_KEY).send({

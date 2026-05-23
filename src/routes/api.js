@@ -8,6 +8,7 @@ const reports = require('../controllers/reports');
 
 // Products
 router.get('/products', products.listProducts);
+router.get('/products/export', products.exportProducts);
 router.get('/products/:id', products.getProduct);
 router.post('/products', products.createProduct);
 router.put('/products/:id', products.updateProduct);
