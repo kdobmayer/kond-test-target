@@ -40,6 +40,7 @@ router.get('/orders/:id', orders.getOrder);
 router.post('/orders', orders.createOrder);
 router.post('/orders/:id/items', orders.addOrderItem);
 router.get('/orders/:id/items', orders.listOrderItems);
+router.patch('/orders/:id/status', orders.updateOrderStatus);
 
 // Reports
 router.get('/reports/low-stock', reports.lowStock);

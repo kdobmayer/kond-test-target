@@ -334,3 +334,230 @@ describe('GET /api/orders/:id/items', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('PATCH /api/orders/:id/status', () => {
+  let orderId;
+
+  beforeEach(async () => {
+    const res = await request(app)
+      .post('/api/orders')
+      .set('x-api-key', API_KEY)
+      .send({ customer_name: 'Dave' });
+    orderId = res.body.data.id;
+  });
+
+  it('transitions pending -> confirmed', async () => {
+    const res = await request(app)
+      .patch(`/api/orders/${orderId}/status`)
+      .set('x-api-key', API_KEY)
+      .send({ status: 'confirmed' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('confirmed');
+    expect(res.body.data.id).toBe(orderId);
+  });
+
+  it('transitions confirmed -> shipped -> delivered', async () => {
+    await request(app)
+      .patch(`/api/orders/${orderId}/status`)
+      .set('x-api-key', API_KEY)
+      .send({ status: 'confirmed' });
+
+    const shippedRes = await request(app)
+      .patch(`/api/orders/${orderId}/status`)
+      .set('x-api-key', API_KEY)
+      .send({ status: 'shipped' });
+
+    expect(shippedRes.status).toBe(200);
+    expect(shippedRes.body.data.status).toBe('shipped');
+
+    const deliveredRes = await request(app)
+      .patch(`/api/orders/${orderId}/status`)
+      .set('x-api-key', API_KEY)
+      .send({ status: 'delivered' });
+
+    expect(deliveredRes.status).toBe(200);
+    expect(deliveredRes.body.data.status).toBe('delivered');
+  });
+
+  it('transitions pending -> cancelled and restores stock', async () => {
+    // Add items to reserve stock (Laptop qty=50, reserve 5)
+    await request(app)
+      .post(`/api/orders/${orderId}/items`)
+      .set('x-api-key', API_KEY)
+      .send({ product_id: 1, quantity: 5 });
+
+    const cancelRes = await request(app)
+      .patch(`/api/orders/${orderId}/status`)
+      .set('x-api-key', API_KEY)
+      .send({ status: 'cancelled' });
+
+    expect(cancelRes.status).toBe(200);
+    expect(cancelRes.body.data.status).toBe('cancelled');
+
+    // Stock should be restored to original 50
+    const productRes = await request(app)
+      .get('/api/products/1')
+      .set('x-api-key', API_KEY);
+
+    expect(productRes.body.data.quantity).toBe(50);
+  });
+
+  it('cancellation with multiple items restores all quantities atomically', async () => {
+    // Laptop (id=1, qty=50) reserve 10, T-Shirt (id=2, qty=5) reserve 3
+    await request(app)
+      .post(`/api/orders/${orderId}/items`)
+      .set('x-api-key', API_KEY)
+      .send({ product_id: 1, quantity: 10 });
+    await request(app)
+      .post(`/api/orders/${orderId}/items`)
+      .set('x-api-key', API_KEY)
+      .send({ product_id: 2, quantity: 3 });
+
+    await request(app)
+      .patch(`/api/orders/${orderId}/status`)
+      .set('x-api-key', API_KEY)
+      .send({ status: 'cancelled' });
+
+    const laptopRes = await request(app).get('/api/products/1').set('x-api-key', API_KEY);
+    const tshirtRes = await request(app).get('/api/products/2').set('x-api-key', API_KEY);
+
+    expect(laptopRes.body.data.quantity).toBe(50);
+    expect(tshirtRes.body.data.quantity).toBe(5);
+  });
+
+  it('cancellation writes compensating stock history entries', async () => {
+    await request(app)
+      .post(`/api/orders/${orderId}/items`)
+      .set('x-api-key', API_KEY)
+      .send({ product_id: 1, quantity: 4 });
+
+    await request(app)
+      .patch(`/api/orders/${orderId}/status`)
+      .set('x-api-key', API_KEY)
+      .send({ status: 'cancelled' });
+
+    const historyRes = await request(app)
+      .get('/api/stock/1/history')
+      .set('x-api-key', API_KEY);
+
+    expect(historyRes.status).toBe(200);
+    expect(historyRes.body.data.adjustments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          quantity_change: -4,
+          type: 'order',
+          reference_id: String(orderId)
+        }),
+        expect.objectContaining({
+          quantity_change: 4,
+          type: 'order_cancel',
+          reference_id: String(orderId)
+        })
+      ])
+    );
+  });
+
+  it('confirm does not change product quantities', async () => {
+    await request(app)
+      .post(`/api/orders/${orderId}/items`)
+      .set('x-api-key', API_KEY)
+      .send({ product_id: 1, quantity: 5 });
+
+    await request(app)
+      .patch(`/api/orders/${orderId}/status`)
+      .set('x-api-key', API_KEY)
+      .send({ status: 'confirmed' });
+
+    const productRes = await request(app)
+      .get('/api/products/1')
+      .set('x-api-key', API_KEY);
+
+    expect(productRes.body.data.quantity).toBe(45);
+  });
+
+  it('returns 422 for invalid transition pending -> shipped', async () => {
+    const res = await request(app)
+      .patch(`/api/orders/${orderId}/status`)
+      .set('x-api-key', API_KEY)
+      .send({ status: 'shipped' });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('Unprocessable Entity');
+    expect(res.body.timestamp).toBeDefined();
+  });
+
+  it('returns 422 for invalid transition confirmed -> cancelled', async () => {
+    await request(app)
+      .patch(`/api/orders/${orderId}/status`)
+      .set('x-api-key', API_KEY)
+      .send({ status: 'confirmed' });
+
+    const res = await request(app)
+      .patch(`/api/orders/${orderId}/status`)
+      .set('x-api-key', API_KEY)
+      .send({ status: 'cancelled' });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('Unprocessable Entity');
+  });
+
+  it('returns 409 when adding items after leaving pending status', async () => {
+    await request(app)
+      .patch(`/api/orders/${orderId}/status`)
+      .set('x-api-key', API_KEY)
+      .send({ status: 'confirmed' });
+
+    const res = await request(app)
+      .post(`/api/orders/${orderId}/items`)
+      .set('x-api-key', API_KEY)
+      .send({ product_id: 1, quantity: 1 });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('Conflict');
+    expect(res.body.timestamp).toBeDefined();
+  });
+
+  it('returns 422 for invalid transition delivered -> pending', async () => {
+    await request(app).patch(`/api/orders/${orderId}/status`).set('x-api-key', API_KEY).send({ status: 'confirmed' });
+    await request(app).patch(`/api/orders/${orderId}/status`).set('x-api-key', API_KEY).send({ status: 'shipped' });
+    await request(app).patch(`/api/orders/${orderId}/status`).set('x-api-key', API_KEY).send({ status: 'delivered' });
+
+    const res = await request(app)
+      .patch(`/api/orders/${orderId}/status`)
+      .set('x-api-key', API_KEY)
+      .send({ status: 'pending' });
+
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('Unprocessable Entity');
+  });
+
+  it('returns 404 for non-existent order', async () => {
+    const res = await request(app)
+      .patch('/api/orders/99999/status')
+      .set('x-api-key', API_KEY)
+      .send({ status: 'confirmed' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('Not Found');
+    expect(res.body.timestamp).toBeDefined();
+  });
+
+  it('returns 400 when status field is missing', async () => {
+    const res = await request(app)
+      .patch(`/api/orders/${orderId}/status`)
+      .set('x-api-key', API_KEY)
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Validation Error');
+  });
+
+  it('returns 401 without API key', async () => {
+    const res = await request(app)
+      .patch(`/api/orders/${orderId}/status`)
+      .send({ status: 'confirmed' });
+
+    expect(res.status).toBe(401);
+  });
+});

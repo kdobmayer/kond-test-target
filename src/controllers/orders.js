@@ -1,5 +1,5 @@
 const { getDb } = require('../db');
-const { validateRequired, validateNumeric, validatePagination, sanitizeString } = require('../validation');
+const { validateRequired, validateNumeric, validatePagination, sanitizeString, validateStatusTransition } = require('../validation');
 
 function sendError(res, status, error, message) {
   return res.status(status).json({
@@ -63,6 +63,14 @@ function addOrderItem(req, res) {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
   if (!order) {
     return sendError(res, 404, 'Not Found', `Order with id ${id} not found`);
+  }
+  if (order.status !== 'pending') {
+    return sendError(
+      res,
+      409,
+      'Conflict',
+      `Cannot add items to order ${id} while status is '${order.status}'`
+    );
   }
 
   const requiredCheck = validateRequired(['product_id', 'quantity'], body);
@@ -161,4 +169,62 @@ function listOrderItems(req, res) {
   res.json({ data: items });
 }
 
-module.exports = { listOrders, getOrder, createOrder, addOrderItem, listOrderItems };
+function updateOrderStatus(req, res) {
+  const db = getDb();
+  const { id } = req.params;
+  const body = req.body;
+
+  const requiredCheck = validateRequired(['status'], body);
+  if (!requiredCheck.valid) {
+    return sendError(res, 400, 'Validation Error', requiredCheck.error);
+  }
+
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+  if (!order) {
+    return sendError(res, 404, 'Not Found', `Order with id ${id} not found`);
+  }
+
+  const transitionCheck = validateStatusTransition(order.status, body.status);
+  if (!transitionCheck.valid) {
+    return sendError(res, 422, 'Unprocessable Entity', transitionCheck.error);
+  }
+
+  const nextStatus = body.status;
+
+  if (nextStatus === 'cancelled') {
+    const items = db.prepare('SELECT product_id, quantity FROM order_items WHERE order_id = ?').all(id);
+    const stockAdjustInsert = db.prepare(`
+      INSERT INTO stock_adjustments (product_id, quantity_change, reason, type, reference_id)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const productUpdate = db.prepare(
+      "UPDATE products SET quantity = quantity + ?, updated_at = datetime('now') WHERE id = ?"
+    );
+    const orderUpdate = db.prepare(
+      "UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?"
+    );
+    const transaction = db.transaction(() => {
+      for (const item of items) {
+        stockAdjustInsert.run(
+          item.product_id,
+          item.quantity,
+          `Order ${id} cancelled`,
+          'order_cancel',
+          String(id)
+        );
+        productUpdate.run(item.quantity, item.product_id);
+      }
+      orderUpdate.run(nextStatus, id);
+    });
+    transaction();
+  } else {
+    db.prepare(
+      "UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?"
+    ).run(nextStatus, id);
+  }
+
+  const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+  res.json({ data: updatedOrder });
+}
+
+module.exports = { listOrders, getOrder, createOrder, addOrderItem, listOrderItems, updateOrderStatus };
