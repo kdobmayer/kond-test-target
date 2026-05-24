@@ -38,6 +38,8 @@ router.put('/stock/adjust', stock.bulkAdjustStock);
 router.get('/orders', orders.listOrders);
 router.get('/orders/:id', orders.getOrder);
 router.post('/orders', orders.createOrder);
+router.post('/orders/:id/items', orders.addOrderItem);
+router.get('/orders/:id/items', orders.listOrderItems);
 
 // Reports
 router.get('/reports/low-stock', reports.lowStock);
