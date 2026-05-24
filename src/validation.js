@@ -86,6 +86,25 @@ function validateRating(rating) {
   return { valid: true };
 }
 
+const STATUS_TRANSITIONS = {
+  pending: ['confirmed', 'cancelled'],
+  confirmed: ['shipped'],
+  shipped: ['delivered'],
+  delivered: [],
+  cancelled: []
+};
+
+function validateStatusTransition(currentStatus, nextStatus) {
+  const allowed = STATUS_TRANSITIONS[currentStatus];
+  if (!allowed) {
+    return { valid: false, error: `Unknown status: ${currentStatus}` };
+  }
+  if (!allowed.includes(nextStatus)) {
+    return { valid: false, error: `Cannot transition from '${currentStatus}' to '${nextStatus}'` };
+  }
+  return { valid: true };
+}
+
 module.exports = {
   validateRequired,
   validateNumeric,
@@ -94,5 +113,6 @@ module.exports = {
   validateSku,
   validatePagination,
   sanitizeString,
-  validateRating
+  validateRating,
+  validateStatusTransition
 };

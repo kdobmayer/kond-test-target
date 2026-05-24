@@ -5,6 +5,7 @@ const categories = require('../controllers/categories');
 const suppliers = require('../controllers/suppliers');
 const stock = require('../controllers/stock');
 const reports = require('../controllers/reports');
+const orders = require('../controllers/orders');
 
 // Products
 router.get('/products', products.listProducts);
@@ -32,6 +33,14 @@ router.get('/stock', stock.listStock);
 router.get('/stock/:product_id/history', stock.getStockHistory);
 router.post('/stock/adjust', stock.adjustStock);
 router.put('/stock/adjust', stock.bulkAdjustStock);
+
+// Orders
+router.get('/orders', orders.listOrders);
+router.get('/orders/:id', orders.getOrder);
+router.post('/orders', orders.createOrder);
+router.post('/orders/:id/items', orders.addOrderItem);
+router.get('/orders/:id/items', orders.listOrderItems);
+router.patch('/orders/:id/status', orders.updateOrderStatus);
 
 // Reports
 router.get('/reports/low-stock', reports.lowStock);
